@@ -1,4 +1,4 @@
-# 이 스크립트를 실행하면 "EmailTaskTrackerAutomation" 이름의 Windows 작업 스케줄러 작업이 등록됩니다.
+﻿# 이 스크립트를 실행하면 "EmailTaskTrackerAutomation" 이름의 Windows 작업 스케줄러 작업이 등록됩니다.
 # 5분마다 watch_and_run.py를 실행해서 새 할일을 자동으로 Claude Code에 넘깁니다.
 #
 # 실행 방법 (PowerShell을 열어서):
