@@ -71,6 +71,9 @@ def init_db():
                 )
                 """
             )
+            cur.execute(
+                "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS automated_at TIMESTAMPTZ"
+            )
         conn.commit()
     finally:
         conn.close()
@@ -107,7 +110,28 @@ def serialize_task(row):
         "dueDate": row["due_date"].isoformat() if row["due_date"] else None,
         "completedAt": row["completed_at"].isoformat() if row["completed_at"] else None,
         "statusHistory": row["status_history"],
+        "automatedAt": row["automated_at"].isoformat() if row.get("automated_at") else None,
     }
+
+
+def build_prompt(task, task_folder):
+    folder = task_folder or "(설정에서 데스크탑 할일 폴더 경로를 지정해주세요)"
+    return f"""[할일 처리 요청]
+
+## 이메일 원문
+{task["rawEmailContent"] or "(원문 없음)"}
+
+## 마감일
+{task["dueDate"] or "지정되지 않음"}
+
+## 요청 사항
+1. "{folder}" 아래에 이 할일 전용 폴더를 만들고, 아래 3가지를 구분해서 각각 파일로 저장해줘.
+   - 이메일 원문 (raw)
+   - 핵심 내용 요약 (summary)
+   - 네가 지금 바로 처리한 결과물이 있다면 그 산출물
+2. 이메일 내용을 한국어로 간단히 요약해줘.
+3. 답장 초안 작성처럼 네가 스스로 처리 가능한 간단한 작업이 있다면 지금 바로 처리해줘.
+4. 이 프롬프트와 함께 첨부된 파일이 있다면, 그 내용도 참고해서 활용해줘."""
 
 
 # ---------- 인증 ----------
@@ -329,6 +353,67 @@ def api_update_status(task_id):
         )
         row = cur.fetchone()
     db.commit()
+    return jsonify(serialize_task(row))
+
+
+@app.route("/api/tasks/<int:task_id>/prompt")
+@api_login_required
+def api_task_prompt(task_id):
+    db = get_db()
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM tasks WHERE id = %s AND user_id = %s", (task_id, session["user_id"])
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify(error="not found"), 404
+        cur.execute("SELECT task_folder FROM users WHERE id = %s", (session["user_id"],))
+        folder = cur.fetchone()["task_folder"] or ""
+
+    return jsonify(prompt=build_prompt(serialize_task(row), folder))
+
+
+@app.route("/api/tasks/pending-automation")
+@api_login_required
+def api_pending_automation():
+    """자동화 스크립트가 폴링하는 엔드포인트: 아직 Claude로 처리하지 않은,
+    이메일에서 생성된 진행중 할일 목록을 반환한다."""
+    db = get_db()
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT * FROM tasks
+            WHERE user_id = %s
+              AND status = '진행중'
+              AND automated_at IS NULL
+              AND raw_email_content <> ''
+            ORDER BY created_at
+            """,
+            (session["user_id"],),
+        )
+        rows = cur.fetchall()
+        cur.execute("SELECT task_folder FROM users WHERE id = %s", (session["user_id"],))
+        folder = cur.fetchone()["task_folder"] or ""
+
+    tasks = [serialize_task(r) for r in rows]
+    for t in tasks:
+        t["prompt"] = build_prompt(t, folder)
+    return jsonify(tasks=tasks)
+
+
+@app.route("/api/tasks/<int:task_id>/automated", methods=["PATCH"])
+@api_login_required
+def api_mark_automated(task_id):
+    db = get_db()
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            "UPDATE tasks SET automated_at = NOW() WHERE id = %s AND user_id = %s RETURNING *",
+            (task_id, session["user_id"]),
+        )
+        row = cur.fetchone()
+    db.commit()
+    if not row:
+        return jsonify(error="not found"), 404
     return jsonify(serialize_task(row))
 
 

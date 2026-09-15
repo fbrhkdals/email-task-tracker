@@ -3,5 +3,8 @@ __pycache__/
 server.log
 
 .vercel
-.env*
+.env
+.env.local
+.env.automation
 supabase/.temp/
+automation/automation.log

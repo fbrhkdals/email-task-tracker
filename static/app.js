@@ -505,6 +505,9 @@ function openDetail(taskId) {
     metaItems.push(`완료일: ${formatDateTime(task.completedAt)}`);
     metaItems.push(`소요 기간: ${daysBetween(task.createdAt, task.completedAt)}일`);
   }
+  if (task.automatedAt) {
+    metaItems.push(`🤖 자동 처리됨: ${formatDateTime(task.automatedAt)}`);
+  }
   metaItems.forEach((txt) => {
     const span = document.createElement("span");
     span.textContent = txt;
