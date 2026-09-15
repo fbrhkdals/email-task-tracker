@@ -2,7 +2,7 @@
 
 이메일을 붙여넣으면 마감일을 자동으로 찾아내고, Claude Desktop/Code에 바로 붙여넣을 수 있는 실행 프롬프트를 만들어주는 할일관리 웹앱입니다.
 
-**바로 열어보기**: (배포 후 이 자리에 주소가 채워집니다)
+**바로 열어보기**: https://email-task-tracker-kwangmin-ryu.vercel.app
 
 ---
 
