@@ -168,6 +168,21 @@ body {
   margin-top: 20px;
 }
 
+.file-chip-input {
+  border: 2px dashed transparent;
+  border-radius: 10px;
+  padding: 2px;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.file-chip-input.drag-over {
+  border-color: #6c5ce7;
+  background: #f7f5ff;
+}
+.file-chip-input .drop-hint {
+  font-size: 11px;
+  color: #999;
+  margin: 6px 2px 0;
+}
 .file-chip-input .chips {
   display: flex;
   flex-wrap: wrap;

@@ -21,12 +21,14 @@ def get_db():
     global _connection
     if _connection is None or _connection.closed:
         _connection = psycopg2.connect(DATABASE_URL)
+        _connection.autocommit = True
     else:
         try:
             with _connection.cursor() as cur:
                 cur.execute("SELECT 1")
         except psycopg2.Error:
             _connection = psycopg2.connect(DATABASE_URL)
+            _connection.autocommit = True
     return _connection
 
 

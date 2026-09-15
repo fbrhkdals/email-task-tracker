@@ -431,6 +431,33 @@ document.getElementById("email-file-input").addEventListener("keydown", (e) => {
   }
 });
 
+// 브라우저 보안 정책상 드래그한 파일의 실제 폴더 경로는 알 수 없다 (파일 이름만 얻을 수 있음).
+// 그래서 설정에 등록된 할일 폴더를 붙여 경로를 추정해준다 — 파일이 다른 폴더에 있다면 사용자가 직접 고쳐야 한다.
+function guessFilePath(filename) {
+  const folder = (state.settings.taskFolder || "").trim();
+  if (!folder) return filename;
+  return folder.replace(/[\\/]+$/, "") + "\\" + filename;
+}
+
+const fileDropzone = document.getElementById("email-file-dropzone");
+["dragenter", "dragover"].forEach((evt) => {
+  fileDropzone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    fileDropzone.classList.add("drag-over");
+  });
+});
+["dragleave", "drop"].forEach((evt) => {
+  fileDropzone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    fileDropzone.classList.remove("drag-over");
+  });
+});
+fileDropzone.addEventListener("drop", (e) => {
+  const files = Array.from(e.dataTransfer.files || []);
+  files.forEach((file) => pendingEmailFiles.push(guessFilePath(file.name)));
+  if (files.length) renderFileChips();
+});
+
 function renderFileChips() {
   const box = document.getElementById("email-file-chips");
   box.innerHTML = "";
