@@ -286,7 +286,8 @@ def api_data():
         tasks = [serialize_task(r) for r in cur.fetchall()]
 
         cur.execute("SELECT task_folder FROM users WHERE id = %s", (uid,))
-        folder = cur.fetchone()["task_folder"] or ""
+        folder_row = cur.fetchone()
+        folder = (folder_row["task_folder"] if folder_row else "") or ""
 
     return jsonify({"settings": {"taskFolder": folder}, "projects": projects, "tasks": tasks})
 
@@ -439,7 +440,8 @@ def api_task_prompt(task_id):
         if not row:
             return jsonify(error="not found"), 404
         cur.execute("SELECT task_folder FROM users WHERE id = %s", (uid,))
-        folder = cur.fetchone()["task_folder"] or ""
+        folder_row = cur.fetchone()
+        folder = (folder_row["task_folder"] if folder_row else "") or ""
 
     return jsonify(prompt=build_prompt(serialize_task(row), folder))
 
@@ -465,7 +467,8 @@ def api_pending_automation():
         )
         rows = cur.fetchall()
         cur.execute("SELECT task_folder FROM users WHERE id = %s", (uid,))
-        folder = cur.fetchone()["task_folder"] or ""
+        folder_row = cur.fetchone()
+        folder = (folder_row["task_folder"] if folder_row else "") or ""
 
     tasks = [serialize_task(r) for r in rows]
     for t in tasks:
