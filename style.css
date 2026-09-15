@@ -164,29 +164,43 @@ body {
   margin-top: 20px;
 }
 
-.file-chip-input .chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-.chip {
-  background: #f1eeff;
-  color: #6c5ce7;
-  padding: 4px 8px;
-  border-radius: 12px;
+.file-reminder {
+  background: #fff2cc;
+  color: #8a6d00;
+  border-radius: 8px;
+  padding: 8px 12px;
   font-size: 12px;
+  margin: 0 0 10px;
+}
+
+.project-manage-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.project-manage-list li {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  font-size: 13px;
 }
-.chip button {
+.project-manage-list .project-task-count {
+  color: #999;
+  font-size: 11px;
+  margin-left: 6px;
+}
+.project-manage-list .empty-note {
+  color: #999;
+  font-size: 12px;
   border: none;
-  background: none;
-  color: #6c5ce7;
-  cursor: pointer;
-  font-weight: 700;
-  padding: 0;
+  padding: 4px 0;
 }
 
 /* 상세 모달 */
@@ -208,7 +222,13 @@ body {
 }
 .detail-section ul { margin: 0; padding-left: 18px; font-size: 13px; }
 
-.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 160px;
+  overflow-y: auto;
+}
 .timeline li {
   font-size: 12px;
   color: #666;

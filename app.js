@@ -108,6 +108,14 @@ function parseDueDate(text) {
   return null;
 }
 
+// ---------- 이메일에 파일 첨부 언급이 있는지 감지 (깜빡하고 안 보내는 걸 막기 위한 리마인더용) ----------
+function mentionsFileKeyword(text) {
+  if (!text) return false;
+  return /첨부|파일\s*(첨부|참고|확인|공유)|문서\s*(첨부|참고)|스캔본|사진\s*첨부|자료\s*(첨부|공유)|attach(ed|ment)?|\.pdf|\.docx?|\.xlsx?|\.pptx?|\.zip/i.test(
+    text
+  );
+}
+
 // ---------- 제목 자동 생성 (가벼운 규칙 기반 요약 — 실제 AI 호출 아님) ----------
 function generateTitle(emailText) {
   if (!emailText || !emailText.trim()) return "제목 없는 할일";
@@ -129,9 +137,6 @@ function generateTitle(emailText) {
 // ---------- AI 실행 프롬프트 생성 ----------
 function buildPrompt(task) {
   const folder = state.settings.taskFolder || "(설정에서 데스크탑 할일 폴더 경로를 지정해주세요)";
-  const files = task.relatedFiles && task.relatedFiles.length
-    ? task.relatedFiles.map((f) => `- ${f}`).join("\n")
-    : "없음";
 
   return `[할일 처리 요청]
 
@@ -141,9 +146,6 @@ ${task.rawEmailContent || "(원문 없음)"}
 ## 마감일
 ${task.dueDate || "지정되지 않음"}
 
-## 관련 파일
-${files}
-
 ## 요청 사항
 1. "${folder}" 아래에 이 할일 전용 폴더를 만들고, 아래 3가지를 구분해서 각각 파일로 저장해줘.
    - 이메일 원문 (raw)
@@ -151,7 +153,7 @@ ${files}
    - 네가 지금 바로 처리한 결과물이 있다면 그 산출물
 2. 이메일 내용을 한국어로 간단히 요약해줘.
 3. 답장 초안 작성처럼 네가 스스로 처리 가능한 간단한 작업이 있다면 지금 바로 처리해줘.
-4. 관련 파일 경로가 안내되어 있다면 참고해서 활용해줘 (파일 내용 자체는 이 프롬프트에 포함되어 있지 않으니 직접 열어서 확인해야 해).`;
+4. 이 프롬프트와 함께 첨부된 파일이 있다면, 그 내용도 참고해서 활용해줘.`;
 }
 
 // ---------- 모달 열기/닫기 ----------
@@ -316,9 +318,10 @@ function renderTaskCard(task) {
   return card;
 }
 
-// ---------- 프로젝트 추가 ----------
+// ---------- 프로젝트 관리 (추가 / 삭제) ----------
 document.getElementById("btn-add-project").addEventListener("click", () => {
   document.getElementById("project-name-input").value = "";
+  renderProjectManageList();
   openModal("modal-project");
 });
 document.getElementById("btn-save-project").addEventListener("click", () => {
@@ -326,9 +329,61 @@ document.getElementById("btn-save-project").addEventListener("click", () => {
   if (!name) return alert("프로젝트 이름을 입력해주세요.");
   state.projects.push({ id: uid(), name, createdAt: new Date().toISOString() });
   saveState();
-  closeModal("modal-project");
+  document.getElementById("project-name-input").value = "";
+  renderProjectManageList();
   render();
 });
+
+function renderProjectManageList() {
+  const list = document.getElementById("project-manage-list");
+  list.innerHTML = "";
+
+  if (state.projects.length === 0) {
+    const li = document.createElement("li");
+    li.className = "empty-note";
+    li.textContent = "아직 만든 프로젝트가 없습니다.";
+    list.appendChild(li);
+    return;
+  }
+
+  state.projects.forEach((p) => {
+    const li = document.createElement("li");
+    const taskCount = state.tasks.filter((t) => t.projectId === p.id).length;
+
+    const label = document.createElement("span");
+    label.textContent = p.name;
+    if (taskCount > 0) {
+      const count = document.createElement("span");
+      count.className = "project-task-count";
+      count.textContent = `할일 ${taskCount}개`;
+      label.appendChild(count);
+    }
+
+    const del = document.createElement("button");
+    del.className = "btn btn-danger";
+    del.textContent = "삭제";
+    del.addEventListener("click", () => deleteProject(p.id, taskCount));
+
+    li.appendChild(label);
+    li.appendChild(del);
+    list.appendChild(li);
+  });
+}
+
+function deleteProject(projectId, taskCount) {
+  const msg = taskCount > 0
+    ? `이 프로젝트를 삭제하면 소속된 할일 ${taskCount}개는 삭제되지 않고 "프로젝트 없음" 상태로 남습니다. 계속할까요?`
+    : "이 프로젝트를 삭제할까요?";
+  if (!confirm(msg)) return;
+
+  state.projects = state.projects.filter((p) => p.id !== projectId);
+  state.tasks.forEach((t) => {
+    if (t.projectId === projectId) t.projectId = null;
+  });
+  saveState();
+  renderProjectManageList();
+  render();
+}
 
 // ---------- 빠른 할일 추가 ----------
 document.getElementById("btn-add-quick").addEventListener("click", () => {
@@ -349,7 +404,6 @@ document.getElementById("btn-save-quick").addEventListener("click", () => {
     id: uid(),
     title,
     rawEmailContent: "",
-    relatedFiles: [],
     projectId,
     status: "진행중",
     createdAt: now,
@@ -364,46 +418,12 @@ document.getElementById("btn-save-quick").addEventListener("click", () => {
 });
 
 // ---------- 이메일로 추가 ----------
-let pendingEmailFiles = [];
-
 document.getElementById("btn-add-email").addEventListener("click", () => {
   document.getElementById("email-content-input").value = "";
   document.getElementById("email-project-select").value = "";
-  pendingEmailFiles = [];
-  renderFileChips();
   populateProjectSelects();
   openModal("modal-email");
 });
-
-document.getElementById("email-file-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    const val = e.target.value.trim();
-    if (val) {
-      pendingEmailFiles.push(val);
-      e.target.value = "";
-      renderFileChips();
-    }
-  }
-});
-
-function renderFileChips() {
-  const box = document.getElementById("email-file-chips");
-  box.innerHTML = "";
-  pendingEmailFiles.forEach((f, idx) => {
-    const chip = document.createElement("span");
-    chip.className = "chip";
-    chip.textContent = f;
-    const rm = document.createElement("button");
-    rm.textContent = "×";
-    rm.addEventListener("click", () => {
-      pendingEmailFiles.splice(idx, 1);
-      renderFileChips();
-    });
-    chip.appendChild(rm);
-    box.appendChild(chip);
-  });
-}
 
 let lastCreatedTaskId = null;
 
@@ -421,7 +441,6 @@ document.getElementById("btn-save-email").addEventListener("click", () => {
     id: taskId,
     title,
     rawEmailContent: content,
-    relatedFiles: pendingEmailFiles.slice(),
     projectId,
     status: "진행중",
     createdAt: now,
@@ -442,7 +461,7 @@ document.getElementById("btn-save-email").addEventListener("click", () => {
     document.getElementById("due-date-fill-input").value = "";
     openModal("modal-due-date");
   } else {
-    showPrompt(task.generatedPrompt);
+    showPrompt(task);
   }
 });
 
@@ -456,17 +475,18 @@ document.getElementById("btn-save-due-date").addEventListener("click", () => {
     render();
   }
   closeModal("modal-due-date");
-  if (task) showPrompt(task.generatedPrompt);
+  if (task) showPrompt(task);
 });
 
 document.getElementById("btn-skip-due-date").addEventListener("click", () => {
   closeModal("modal-due-date");
   const task = state.tasks.find((t) => t.id === lastCreatedTaskId);
-  if (task) showPrompt(task.generatedPrompt);
+  if (task) showPrompt(task);
 });
 
-function showPrompt(text) {
-  document.getElementById("prompt-output").value = text;
+function showPrompt(task) {
+  document.getElementById("prompt-output").value = task.generatedPrompt;
+  document.getElementById("prompt-file-reminder").hidden = !mentionsFileKeyword(task.rawEmailContent);
   openModal("modal-prompt");
 }
 
@@ -537,24 +557,11 @@ function openDetail(taskId) {
     emailSection.hidden = true;
   }
 
-  const filesSection = document.getElementById("detail-files-section");
-  if (task.relatedFiles && task.relatedFiles.length) {
-    filesSection.hidden = false;
-    const ul = document.getElementById("detail-files-list");
-    ul.innerHTML = "";
-    task.relatedFiles.forEach((f) => {
-      const li = document.createElement("li");
-      li.textContent = f;
-      ul.appendChild(li);
-    });
-  } else {
-    filesSection.hidden = true;
-  }
-
   const promptSection = document.getElementById("detail-prompt-section");
   if (task.generatedPrompt) {
     promptSection.hidden = false;
     document.getElementById("detail-prompt-content").value = task.generatedPrompt;
+    document.getElementById("detail-file-reminder").hidden = !mentionsFileKeyword(task.rawEmailContent);
   } else {
     promptSection.hidden = true;
   }
