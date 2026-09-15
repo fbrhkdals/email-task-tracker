@@ -270,6 +270,8 @@ function render() {
   document.getElementById("empty-state").hidden = tasks.length > 0;
 
   tasks.forEach((task) => list.appendChild(renderTaskCard(task)));
+
+  renderHome();
 }
 
 function renderTaskCard(task) {
@@ -551,7 +553,15 @@ function copyText(text, sourceElId) {
   const finish = (ok) => {
     if (!ok) {
       const el = document.getElementById(sourceElId);
-      el.select();
+      if (typeof el.select === "function") {
+        el.select();
+      } else {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
     }
   };
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -658,6 +668,8 @@ async function changeStatus(taskId, newStatus) {
 // ---------- 설정 ----------
 document.getElementById("btn-settings").addEventListener("click", () => {
   document.getElementById("settings-folder-input").value = state.settings.taskFolder || "";
+  document.getElementById("automation-instructions").hidden = true;
+  loadAutomationStatus();
   openModal("modal-settings");
 });
 document.getElementById("btn-save-settings").addEventListener("click", async () => {
@@ -668,6 +680,203 @@ document.getElementById("btn-save-settings").addEventListener("click", async () 
   }
   closeModal("modal-settings");
 });
+
+// ---------- PC 연동 (자동화) ----------
+function timeAgo(iso) {
+  if (!iso) return null;
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "방금 전";
+  if (mins < 60) return `${mins}분 전`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.floor(hours / 24)}일 전`;
+}
+
+async function loadAutomationStatus() {
+  const statusText = document.getElementById("automation-status-text");
+  const connectBtn = document.getElementById("btn-automation-connect");
+  const disconnectBtn = document.getElementById("btn-automation-disconnect");
+
+  statusText.textContent = "확인 중...";
+  const status = await api("GET", "/api/automation/status");
+  if (!status) return;
+
+  if (!status.linked) {
+    statusText.textContent = "❌ 아직 연결되지 않았습니다.";
+    connectBtn.hidden = false;
+    disconnectBtn.hidden = true;
+    return;
+  }
+
+  connectBtn.hidden = true;
+  disconnectBtn.hidden = false;
+  if (!status.lastSeen) {
+    statusText.textContent = "🔗 연결됨 — 아직 PC에서 접속한 기록이 없습니다 (설정을 마저 진행해주세요).";
+  } else {
+    statusText.textContent = `✅ 연결됨 (마지막 확인: ${timeAgo(status.lastSeen)})`;
+  }
+}
+
+document.getElementById("btn-automation-connect").addEventListener("click", async () => {
+  const res = await api("POST", "/api/automation/connect");
+  if (!res) return;
+  document.getElementById("automation-token-value").textContent = res.token;
+  document.getElementById("automation-instructions").hidden = false;
+  document.getElementById("btn-automation-connect").hidden = true;
+  document.getElementById("btn-automation-disconnect").hidden = false;
+  document.getElementById("automation-status-text").textContent =
+    "🔗 연결됨 — 아직 PC에서 접속한 기록이 없습니다 (설정을 마저 진행해주세요).";
+});
+
+document.getElementById("btn-copy-token").addEventListener("click", () => {
+  copyText(document.getElementById("automation-token-value").textContent, "automation-token-value");
+});
+
+document.getElementById("btn-automation-disconnect").addEventListener("click", async () => {
+  if (!confirm("연결을 끊으면 PC의 자동화 스크립트가 더 이상 새 할일을 가져오지 못합니다. 끊을까요?")) return;
+  const res = await api("POST", "/api/automation/disconnect");
+  if (!res) return;
+  document.getElementById("automation-instructions").hidden = true;
+  loadAutomationStatus();
+});
+
+// ---------- 화면 전환 (홈 / 할일 목록) ----------
+document.querySelectorAll(".view-tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".view-tab").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    const view = btn.dataset.view;
+    document.getElementById("view-home").hidden = view !== "home";
+    document.getElementById("view-tasks").hidden = view !== "tasks";
+    if (view === "home") renderHome();
+  });
+});
+
+// ---------- 홈 (대시보드) ----------
+let currentRange = "all";
+let statusChart = null;
+
+document.getElementById("home-range-tabs").addEventListener("click", (e) => {
+  const btn = e.target.closest(".range-tab");
+  if (!btn) return;
+  document.querySelectorAll(".range-tab").forEach((t) => t.classList.remove("active"));
+  btn.classList.add("active");
+  currentRange = btn.dataset.range;
+  renderHome();
+});
+
+function rangeStart(range) {
+  const now = new Date();
+  if (range === "day") {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+  if (range === "week") {
+    const day = now.getDay() === 0 ? 7 : now.getDay(); // 월요일=1 ... 일요일=7
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (day - 1));
+    return monday;
+  }
+  if (range === "year") {
+    return new Date(now.getFullYear(), 0, 1);
+  }
+  return null; // "all"
+}
+
+function renderHome() {
+  if (document.getElementById("view-home").hidden) return;
+
+  const start = rangeStart(currentRange);
+  const tasksInRange = state.tasks.filter((t) => !start || new Date(t.createdAt) >= start);
+
+  const counts = { 진행중: 0, 완료: 0, 보류: 0, 취소: 0 };
+  tasksInRange.forEach((t) => {
+    if (counts[t.status] !== undefined) counts[t.status]++;
+  });
+  const total = tasksInRange.length;
+
+  renderStatCards(total, counts);
+  renderStatusChart(counts);
+  renderDeadlines();
+}
+
+function renderStatCards(total, counts) {
+  const box = document.getElementById("stat-cards");
+  box.innerHTML = "";
+  const items = [
+    ["전체", total, "total"],
+    ["진행중", counts["진행중"], "진행중"],
+    ["완료", counts["완료"], "완료"],
+    ["보류", counts["보류"], "보류"],
+    ["취소", counts["취소"], "취소"],
+  ];
+  items.forEach(([label, value, cls]) => {
+    const card = document.createElement("div");
+    card.className = `stat-card stat-${cls}`;
+    card.innerHTML = `<div class="stat-value">${value}</div><div class="stat-label">${label}</div>`;
+    box.appendChild(card);
+  });
+}
+
+function renderStatusChart(counts) {
+  const ctx = document.getElementById("status-chart");
+  if (typeof Chart === "undefined") return;
+
+  const data = {
+    labels: ["진행중", "완료", "보류", "취소"],
+    datasets: [
+      {
+        label: "할일 개수",
+        data: [counts["진행중"], counts["완료"], counts["보류"], counts["취소"]],
+        backgroundColor: ["#2563eb", "#1a9850", "#b8860b", "#999"],
+        borderRadius: 6,
+      },
+    ],
+  };
+
+  if (statusChart) {
+    statusChart.data = data;
+    statusChart.update();
+    return;
+  }
+
+  statusChart = new Chart(ctx, {
+    type: "bar",
+    data,
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+    },
+  });
+}
+
+function renderDeadlines() {
+  const today = todayISO();
+  const upcoming = state.tasks
+    .filter((t) => t.status === "진행중" && t.dueDate && daysBetween(today, t.dueDate) <= 3)
+    .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
+
+  const list = document.getElementById("deadline-list");
+  list.innerHTML = "";
+  document.getElementById("deadline-empty").hidden = upcoming.length > 0;
+
+  upcoming.forEach((task) => {
+    const li = document.createElement("li");
+    li.addEventListener("click", () => openDetail(task.id));
+
+    const label = document.createElement("span");
+    label.textContent = task.title;
+
+    const diff = daysBetween(today, task.dueDate);
+    const dday = document.createElement("span");
+    dday.className = "dday" + (diff < 0 ? " overdue" : "");
+    dday.textContent = diff < 0 ? `기한 지남 (${-diff}일)` : diff === 0 ? "오늘 마감" : `D-${diff}`;
+
+    li.appendChild(label);
+    li.appendChild(dday);
+    list.appendChild(li);
+  });
+}
 
 // ---------- 초기 렌더 ----------
 loadState();

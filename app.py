@@ -1,4 +1,6 @@
+import hashlib
 import os
+import secrets
 from functools import wraps
 
 import psycopg2
@@ -79,6 +81,12 @@ def init_db():
             cur.execute(
                 "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS related_files JSONB NOT NULL DEFAULT '[]'"
             )
+            cur.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS automation_token_hash TEXT"
+            )
+            cur.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS automation_last_seen TIMESTAMPTZ"
+            )
         conn.commit()
     finally:
         conn.close()
@@ -99,6 +107,50 @@ def api_login_required(view):
     def wrapped(*args, **kwargs):
         if "user_id" not in session:
             return jsonify(error="로그인이 필요합니다."), 401
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def hash_token(raw_token):
+    return hashlib.sha256(raw_token.encode()).hexdigest()
+
+
+def resolve_automation_user_id():
+    """Authorization: Bearer <자동화 토큰> 헤더로 사용자를 찾고, 성공하면
+    마지막 접속 시각을 갱신한다 (설정 화면의 연결 상태 표시에 쓰임)."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth[len("Bearer ") :].strip()
+    if not token:
+        return None
+
+    db = get_db()
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            "SELECT id FROM users WHERE automation_token_hash = %s", (hash_token(token),)
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+
+    with db.cursor() as cur:
+        cur.execute(
+            "UPDATE users SET automation_last_seen = NOW() WHERE id = %s", (row["id"],)
+        )
+    return row["id"]
+
+
+def automation_or_session_required(view):
+    """자동화 스크립트(토큰)와 브라우저(세션 쿠키) 양쪽에서 호출 가능한 엔드포인트용."""
+
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        user_id = session.get("user_id") or resolve_automation_user_id()
+        if user_id is None:
+            return jsonify(error="인증이 필요합니다."), 401
+        request.resolved_user_id = user_id
         return view(*args, **kwargs)
 
     return wrapped
@@ -377,27 +429,27 @@ def api_update_status(task_id):
 
 
 @app.route("/api/tasks/<int:task_id>/prompt")
-@api_login_required
+@automation_or_session_required
 def api_task_prompt(task_id):
+    uid = request.resolved_user_id
     db = get_db()
     with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        cur.execute(
-            "SELECT * FROM tasks WHERE id = %s AND user_id = %s", (task_id, session["user_id"])
-        )
+        cur.execute("SELECT * FROM tasks WHERE id = %s AND user_id = %s", (task_id, uid))
         row = cur.fetchone()
         if not row:
             return jsonify(error="not found"), 404
-        cur.execute("SELECT task_folder FROM users WHERE id = %s", (session["user_id"],))
+        cur.execute("SELECT task_folder FROM users WHERE id = %s", (uid,))
         folder = cur.fetchone()["task_folder"] or ""
 
     return jsonify(prompt=build_prompt(serialize_task(row), folder))
 
 
 @app.route("/api/tasks/pending-automation")
-@api_login_required
+@automation_or_session_required
 def api_pending_automation():
     """자동화 스크립트가 폴링하는 엔드포인트: 아직 Claude로 처리하지 않은,
     이메일에서 생성된 진행중 할일 목록을 반환한다."""
+    uid = request.resolved_user_id
     db = get_db()
     with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(
@@ -409,32 +461,75 @@ def api_pending_automation():
               AND raw_email_content <> ''
             ORDER BY created_at
             """,
-            (session["user_id"],),
+            (uid,),
         )
         rows = cur.fetchall()
-        cur.execute("SELECT task_folder FROM users WHERE id = %s", (session["user_id"],))
+        cur.execute("SELECT task_folder FROM users WHERE id = %s", (uid,))
         folder = cur.fetchone()["task_folder"] or ""
 
     tasks = [serialize_task(r) for r in rows]
     for t in tasks:
         t["prompt"] = build_prompt(t, folder)
-    return jsonify(tasks=tasks)
+    return jsonify(tasks=tasks, taskFolder=folder)
 
 
 @app.route("/api/tasks/<int:task_id>/automated", methods=["PATCH"])
-@api_login_required
+@automation_or_session_required
 def api_mark_automated(task_id):
+    uid = request.resolved_user_id
     db = get_db()
     with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(
             "UPDATE tasks SET automated_at = NOW() WHERE id = %s AND user_id = %s RETURNING *",
-            (task_id, session["user_id"]),
+            (task_id, uid),
         )
         row = cur.fetchone()
     db.commit()
     if not row:
         return jsonify(error="not found"), 404
     return jsonify(serialize_task(row))
+
+
+# ---------- PC 연동 (자동화 토큰) ----------
+@app.route("/api/automation/connect", methods=["POST"])
+@api_login_required
+def api_automation_connect():
+    raw_token = secrets.token_urlsafe(32)
+    db = get_db()
+    with db.cursor() as cur:
+        cur.execute(
+            "UPDATE users SET automation_token_hash = %s, automation_last_seen = NULL WHERE id = %s",
+            (hash_token(raw_token), session["user_id"]),
+        )
+    return jsonify(token=raw_token)
+
+
+@app.route("/api/automation/disconnect", methods=["POST"])
+@api_login_required
+def api_automation_disconnect():
+    db = get_db()
+    with db.cursor() as cur:
+        cur.execute(
+            "UPDATE users SET automation_token_hash = NULL, automation_last_seen = NULL WHERE id = %s",
+            (session["user_id"],),
+        )
+    return jsonify(ok=True)
+
+
+@app.route("/api/automation/status")
+@api_login_required
+def api_automation_status():
+    db = get_db()
+    with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            "SELECT automation_token_hash, automation_last_seen FROM users WHERE id = %s",
+            (session["user_id"],),
+        )
+        row = cur.fetchone()
+    return jsonify(
+        linked=row["automation_token_hash"] is not None,
+        lastSeen=row["automation_last_seen"].isoformat() if row["automation_last_seen"] else None,
+    )
 
 
 def _now_iso():

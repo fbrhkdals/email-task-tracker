@@ -43,6 +43,96 @@ body {
 
 .app-main { max-width: 900px; margin: 0 auto; padding: 20px 16px 60px; }
 
+.view-tabs {
+  display: flex;
+  gap: 6px;
+  max-width: 900px;
+  margin: 16px auto 0;
+  padding: 0 16px;
+}
+.view-tab {
+  border: none;
+  background: none;
+  color: #888;
+  padding: 8px 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.view-tab.active { color: #6c5ce7; border-bottom-color: #6c5ce7; }
+
+.home-range-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+.range-tab {
+  border: none;
+  background: #eceef5;
+  color: #555;
+  padding: 7px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.range-tab.active { background: #6c5ce7; color: #fff; }
+
+.stat-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 10px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.stat-card .stat-value { font-size: 22px; font-weight: 700; }
+.stat-card .stat-label { font-size: 12px; color: #888; margin-top: 4px; }
+.stat-card.stat-total .stat-value { color: #333; }
+.stat-card.stat-진행중 .stat-value { color: #2563eb; }
+.stat-card.stat-완료 .stat-value { color: #1a9850; }
+.stat-card.stat-보류 .stat-value { color: #b8860b; }
+.stat-card.stat-취소 .stat-value { color: #888; }
+
+.chart-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin-bottom: 16px;
+}
+
+.deadline-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.deadline-card h3 { margin: 0 0 10px; font-size: 14px; color: #555; }
+.deadline-list { list-style: none; margin: 0; padding: 0; }
+.deadline-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
+  cursor: pointer;
+}
+.deadline-list li:last-child { border-bottom: none; }
+.deadline-list .dday {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  background: #e0ecff;
+  color: #2563eb;
+}
+.deadline-list .dday.overdue { background: #ffe0e0; color: #c0392b; }
+
 .toolbar {
   display: flex;
   justify-content: space-between;
@@ -140,7 +230,38 @@ body {
 .modal-wide { max-width: 640px; }
 
 .modal h2 { margin: 0 0 6px; font-size: 17px; }
+.modal h3 { margin: 0 0 6px; font-size: 14px; }
 .modal-note { font-size: 12px; color: #888; margin: 4px 0 14px; }
+.settings-divider { border: none; border-top: 1px solid #eee; margin: 18px 0; }
+
+.token-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f7f7fb;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+.token-box code {
+  flex: 1;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.setup-steps {
+  font-size: 12px;
+  color: #555;
+  padding-left: 18px;
+  margin: 0 0 14px;
+}
+.setup-steps li { margin-bottom: 6px; }
+.setup-steps code {
+  background: #f1eeff;
+  color: #6c5ce7;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
 
 .modal label {
   display: block;

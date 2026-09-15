@@ -7,8 +7,13 @@ Windows 작업 스케줄러 등으로 몇 분 간격 반복 실행하도록 등�
 이 스크립트는 할일의 "상태"는 절대 바꾸지 않는다 — 상태 변경은 항상 사람이
 웹사이트에서 직접 하는 것이 원칙이기 때문. 여기서는 프롬프트를 Claude에게
 넘겨서 실행시키고, 처리 완료 표시(automated_at)만 남긴다.
+
+인증은 사이트 설정(⚙️ 설정 > PC 연동)에서 발급받은 토큰으로 한다 — 로그인
+비밀번호가 아니다. 토큰이 유출돼도 사이트에서 "연결 끊기"로 바로 무효화할 수
+있다.
 """
 
+import os
 import shlex
 import subprocess
 import sys
@@ -17,14 +22,12 @@ from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
-import os
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env.automation")
 
 SITE_URL = os.environ.get("SITE_URL", "").rstrip("/")
-USERNAME = os.environ.get("EMAIL_TASK_USERNAME", "")
-PASSWORD = os.environ.get("EMAIL_TASK_PASSWORD", "")
+TOKEN = os.environ.get("EMAIL_TASK_TOKEN", "")
 CLAUDE_CMD = os.environ.get("CLAUDE_CMD", "claude")
 LOG_FILE = BASE_DIR / "automation.log"
 
@@ -34,17 +37,6 @@ def log(message):
     print(line)
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(line + "\n")
-
-
-def login(session):
-    session.post(
-        f"{SITE_URL}/login",
-        data={"username": USERNAME, "password": PASSWORD},
-        allow_redirects=True,
-    )
-    check = session.get(f"{SITE_URL}/api/data")
-    if check.status_code != 200:
-        raise RuntimeError("로그인에 실패했습니다. .env.automation의 아이디/비밀번호를 확인하세요.")
 
 
 def run_claude(prompt, cwd):
@@ -59,23 +51,26 @@ def run_claude(prompt, cwd):
 
 
 def main():
-    if not SITE_URL or not USERNAME or not PASSWORD:
-        log("설정이 비어 있습니다. automation/.env.automation 파일을 만들고 값을 채워주세요.")
+    if not SITE_URL or not TOKEN:
+        log("설정이 비어 있습니다. automation/.env.automation 파일에 SITE_URL과 EMAIL_TASK_TOKEN을 채워주세요.")
         sys.exit(1)
 
     session = requests.Session()
-    login(session)
+    session.headers["Authorization"] = f"Bearer {TOKEN}"
 
     resp = session.get(f"{SITE_URL}/api/tasks/pending-automation")
+    if resp.status_code == 401:
+        log("인증 실패 — 토큰이 잘못됐거나 사이트에서 연결이 끊겼습니다. 설정에서 새 토큰을 발급받아주세요.")
+        sys.exit(1)
     resp.raise_for_status()
-    tasks = resp.json().get("tasks", [])
+
+    body = resp.json()
+    tasks = body.get("tasks", [])
+    task_folder = body.get("taskFolder") or None
 
     if not tasks:
         log("처리할 새 할일이 없습니다.")
         return
-
-    data_resp = session.get(f"{SITE_URL}/api/data")
-    task_folder = data_resp.json().get("settings", {}).get("taskFolder") or None
 
     for task in tasks:
         log(f"처리 시작: [{task['id']}] {task['title']}")
