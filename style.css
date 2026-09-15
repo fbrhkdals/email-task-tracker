@@ -1,0 +1,235 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+  background: #f4f5f9;
+  color: #222;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: #fff;
+  padding: 16px 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.app-header h1 { margin: 0; font-size: 20px; }
+
+.header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-primary { background: #6c5ce7; color: #fff; }
+.btn-primary:hover { background: #5a4bd6; }
+.btn-secondary { background: #dfe6f7; color: #333; }
+.btn-secondary:hover { background: #cdd8f2; }
+.btn-ghost { background: #eee; color: #333; }
+.btn-ghost:hover { background: #e0e0e0; }
+.btn-danger { background: #ffe0e0; color: #c0392b; }
+
+.app-main { max-width: 900px; margin: 0 auto; padding: 20px 16px 60px; }
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.status-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab {
+  border: none;
+  background: #eceef5;
+  color: #555;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tab.active { background: #6c5ce7; color: #fff; }
+
+.filters { display: flex; gap: 8px; }
+.filters select {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  font-size: 13px;
+  background: #fff;
+}
+
+.empty-state { text-align: center; color: #999; padding: 40px 0; }
+
+.task-list { display: flex; flex-direction: column; gap: 10px; }
+
+.task-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.task-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.09); }
+
+.task-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.task-title { font-size: 15px; font-weight: 600; margin: 0; }
+
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.badge-진행중 { background: #e0ecff; color: #2563eb; }
+.badge-완료 { background: #dcf7e3; color: #1a9850; }
+.badge-보류 { background: #fff2cc; color: #b8860b; }
+.badge-취소 { background: #f0f0f0; color: #888; }
+
+.task-meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: #888; }
+.task-meta .overdue { color: #c0392b; font-weight: 600; }
+.project-tag { background: #f1eeff; color: #6c5ce7; padding: 2px 8px; border-radius: 10px; }
+
+/* 모달 공통 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+.modal-overlay[hidden] { display: none; }
+
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-wide { max-width: 640px; }
+
+.modal h2 { margin: 0 0 6px; font-size: 17px; }
+.modal-note { font-size: 12px; color: #888; margin: 4px 0 14px; }
+
+.modal label {
+  display: block;
+  font-size: 12px;
+  color: #555;
+  margin: 12px 0 4px;
+}
+.modal input[type="text"],
+.modal input[type="date"],
+.modal select,
+.modal textarea {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.modal textarea { resize: vertical; }
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.file-chip-input .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.chip {
+  background: #f1eeff;
+  color: #6c5ce7;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chip button {
+  border: none;
+  background: none;
+  color: #6c5ce7;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0;
+}
+
+/* 상세 모달 */
+.detail-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.detail-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: #777; margin: 10px 0; }
+
+.status-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+
+.detail-section { margin-top: 18px; }
+.detail-section h3 { font-size: 13px; color: #555; margin: 0 0 8px; }
+.detail-section pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f7f7fb;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 13px;
+  margin: 0;
+}
+.detail-section ul { margin: 0; padding-left: 18px; font-size: 13px; }
+
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline li {
+  font-size: 12px;
+  color: #666;
+  padding: 6px 0 6px 16px;
+  border-left: 2px solid #ddd;
+  position: relative;
+}
+.timeline li::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6c5ce7;
+}
+
+@media (max-width: 500px) {
+  .app-header { flex-direction: column; align-items: stretch; }
+  .header-actions { justify-content: stretch; }
+  .header-actions .btn { flex: 1; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+}
