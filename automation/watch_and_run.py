@@ -15,6 +15,7 @@ Windows 작업 스케줄러 등으로 몇 분 간격 반복 실행하도록 등�
 
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -40,8 +41,18 @@ def log(message):
 
 
 def run_claude(prompt, cwd):
+    parts = shlex.split(CLAUDE_CMD, posix=False)
+    resolved = shutil.which(parts[0]) or parts[0]
+    argv = [resolved] + parts[1:] + ["-p", prompt]
+
+    # claude(.cmd)처럼 npm이 설치한 CLI는 배치 스크립트라서, Windows에서는
+    # CreateProcess가 직접 실행하지 못하고 cmd.exe를 거쳐야 한다
+    # (그냥 실행하면 "[WinError 2] 지정된 파일을 찾을 수 없습니다"가 난다).
+    if os.name == "nt" and resolved.lower().endswith((".cmd", ".bat")):
+        argv = ["cmd.exe", "/c"] + argv
+
     result = subprocess.run(
-        shlex.split(CLAUDE_CMD, posix=False) + ["-p", prompt],
+        argv,
         cwd=cwd if cwd and Path(cwd).is_dir() else None,
         capture_output=True,
         text=True,
