@@ -825,10 +825,10 @@ function renderStatusChart(counts) {
     labels: ["진행중", "완료", "보류", "취소"],
     datasets: [
       {
-        label: "할일 개수",
         data: [counts["진행중"], counts["완료"], counts["보류"], counts["취소"]],
-        backgroundColor: ["#2563eb", "#1a9850", "#b8860b", "#999"],
-        borderRadius: 6,
+        backgroundColor: ["#2563eb", "#16a34a", "#b8860b", "#8a8f9c"],
+        borderColor: "#fff",
+        borderWidth: 2,
       },
     ],
   };
@@ -840,12 +840,13 @@ function renderStatusChart(counts) {
   }
 
   statusChart = new Chart(ctx, {
-    type: "bar",
+    type: "pie",
     data,
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+      plugins: {
+        legend: { position: "bottom", labels: { boxWidth: 12, font: { family: "Pretendard" } } },
+      },
     },
   });
 }
