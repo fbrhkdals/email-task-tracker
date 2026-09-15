@@ -20,7 +20,11 @@ body {
 
 .app-header h1 { margin: 0; font-size: 20px; }
 
-.header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.header-left { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.user-info { font-size: 12px; color: #888; }
+
+.header-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.header-actions form { margin: 0; }
 
 .btn {
   border: none;
@@ -246,6 +250,37 @@ body {
   border-radius: 50%;
   background: #6c5ce7;
 }
+
+/* 로그인 / 회원가입 */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.auth-container {
+  max-width: 360px;
+  max-height: none;
+}
+.auth-title { text-align: center; font-size: 15px; color: #555; margin: 0 0 18px; }
+.auth-form { display: flex; flex-direction: column; gap: 10px; }
+.auth-form input {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.auth-error {
+  background: #ffe0e0;
+  color: #c0392b;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+.auth-switch { text-align: center; font-size: 13px; color: #666; margin: 16px 0 0; }
+.auth-switch a { color: #6c5ce7; font-weight: 600; text-decoration: none; }
 
 @media (max-width: 500px) {
   .app-header { flex-direction: column; align-items: stretch; }

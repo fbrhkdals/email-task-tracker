@@ -1,5 +1,7 @@
-.vercel
+__pycache__/
+*.pyc
 server.log
 
 .vercel
 .env*
+supabase/.temp/

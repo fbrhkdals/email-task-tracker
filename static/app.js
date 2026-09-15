@@ -1,39 +1,34 @@
-// ---------- 상태 저장/불러오기 (브라우저 localStorage 전용) ----------
-const STORAGE_KEY = "email_task_tracker_v1";
+// ---------- 상태 (서버에서 불러와 메모리에 들고 있다가, 변경 시마다 다시 불러옴) ----------
 const STATUSES = ["진행중", "완료", "보류", "취소"];
 
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { settings: { taskFolder: "" }, projects: [], tasks: [] };
-    const parsed = JSON.parse(raw);
-    return {
-      settings: parsed.settings || { taskFolder: "" },
-      projects: parsed.projects || [],
-      tasks: parsed.tasks || [],
-    };
-  } catch (e) {
-    console.error("저장된 데이터를 불러오지 못했습니다.", e);
-    return { settings: { taskFolder: "" }, projects: [], tasks: [] };
+let state = { settings: { taskFolder: "" }, projects: [], tasks: [] };
+
+async function api(method, url, body) {
+  const res = await fetch(url, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (res.status === 401) {
+    window.location.href = "/login";
+    return null;
   }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    alert(err.error || "요청 처리 중 오류가 발생했습니다.");
+    return null;
+  }
+  return res.status === 204 ? null : res.json();
 }
 
-function saveState() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    console.error("데이터 저장에 실패했습니다.", e);
-    alert("데이터 저장에 실패했습니다. 브라우저 저장공간이 가득 찼거나 비공개 모드일 수 있어요.");
-  }
+async function loadState() {
+  const data = await api("GET", "/api/data");
+  if (!data) return;
+  state = data;
+  render();
 }
-
-let state = loadState();
 
 // ---------- 유틸 ----------
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
 function pad(n) {
   return String(n).padStart(2, "0");
 }
@@ -324,14 +319,14 @@ document.getElementById("btn-add-project").addEventListener("click", () => {
   renderProjectManageList();
   openModal("modal-project");
 });
-document.getElementById("btn-save-project").addEventListener("click", () => {
+document.getElementById("btn-save-project").addEventListener("click", async () => {
   const name = document.getElementById("project-name-input").value.trim();
   if (!name) return alert("프로젝트 이름을 입력해주세요.");
-  state.projects.push({ id: uid(), name, createdAt: new Date().toISOString() });
-  saveState();
+  const created = await api("POST", "/api/projects", { name });
+  if (!created) return;
+  await loadState();
   document.getElementById("project-name-input").value = "";
   renderProjectManageList();
-  render();
 });
 
 function renderProjectManageList() {
@@ -370,19 +365,15 @@ function renderProjectManageList() {
   });
 }
 
-function deleteProject(projectId, taskCount) {
+async function deleteProject(projectId, taskCount) {
   const msg = taskCount > 0
     ? `이 프로젝트를 삭제하면 소속된 할일 ${taskCount}개는 삭제되지 않고 "프로젝트 없음" 상태로 남습니다. 계속할까요?`
     : "이 프로젝트를 삭제할까요?";
   if (!confirm(msg)) return;
 
-  state.projects = state.projects.filter((p) => p.id !== projectId);
-  state.tasks.forEach((t) => {
-    if (t.projectId === projectId) t.projectId = null;
-  });
-  saveState();
+  await api("DELETE", `/api/projects/${projectId}`);
+  await loadState();
   renderProjectManageList();
-  render();
 }
 
 // ---------- 빠른 할일 추가 ----------
@@ -393,28 +384,21 @@ document.getElementById("btn-add-quick").addEventListener("click", () => {
   populateProjectSelects();
   openModal("modal-quick");
 });
-document.getElementById("btn-save-quick").addEventListener("click", () => {
+document.getElementById("btn-save-quick").addEventListener("click", async () => {
   const title = document.getElementById("quick-title-input").value.trim();
   if (!title) return alert("제목을 입력해주세요.");
   const projectId = document.getElementById("quick-project-select").value || null;
   const dueDate = document.getElementById("quick-due-input").value || null;
-  const now = new Date().toISOString();
 
-  state.tasks.push({
-    id: uid(),
+  const created = await api("POST", "/api/tasks", {
     title,
     rawEmailContent: "",
     projectId,
-    status: "진행중",
-    createdAt: now,
     dueDate,
-    completedAt: null,
-    generatedPrompt: null,
-    statusHistory: [{ status: "진행중", changedAt: now }],
   });
-  saveState();
+  if (!created) return;
   closeModal("modal-quick");
-  render();
+  await loadState();
 });
 
 // ---------- 이메일로 추가 ----------
@@ -427,52 +411,43 @@ document.getElementById("btn-add-email").addEventListener("click", () => {
 
 let lastCreatedTaskId = null;
 
-document.getElementById("btn-save-email").addEventListener("click", () => {
+document.getElementById("btn-save-email").addEventListener("click", async () => {
   const content = document.getElementById("email-content-input").value.trim();
   if (!content) return alert("이메일 내용을 붙여넣어주세요.");
   const projectId = document.getElementById("email-project-select").value || null;
 
   const dueDate = parseDueDate(content);
   const title = generateTitle(content);
-  const now = new Date().toISOString();
-  const taskId = uid();
 
-  const task = {
-    id: taskId,
+  const created = await api("POST", "/api/tasks", {
     title,
     rawEmailContent: content,
     projectId,
-    status: "진행중",
-    createdAt: now,
     dueDate,
-    completedAt: null,
-    generatedPrompt: null,
-    statusHistory: [{ status: "진행중", changedAt: now }],
-  };
-  task.generatedPrompt = buildPrompt(task);
+  });
+  if (!created) return;
 
-  state.tasks.push(task);
-  saveState();
   closeModal("modal-email");
-  render();
+  await loadState();
 
-  lastCreatedTaskId = taskId;
+  lastCreatedTaskId = created.id;
   if (!dueDate) {
     document.getElementById("due-date-fill-input").value = "";
     openModal("modal-due-date");
   } else {
-    showPrompt(task);
+    showPrompt(created);
   }
 });
 
-document.getElementById("btn-save-due-date").addEventListener("click", () => {
+document.getElementById("btn-save-due-date").addEventListener("click", async () => {
   const val = document.getElementById("due-date-fill-input").value;
-  const task = state.tasks.find((t) => t.id === lastCreatedTaskId);
+  let task = state.tasks.find((t) => t.id === lastCreatedTaskId);
   if (task && val) {
-    task.dueDate = val;
-    task.generatedPrompt = buildPrompt(task);
-    saveState();
-    render();
+    const updated = await api("PATCH", `/api/tasks/${task.id}/due_date`, { dueDate: val });
+    if (updated) {
+      task = updated;
+      await loadState();
+    }
   }
   closeModal("modal-due-date");
   if (task) showPrompt(task);
@@ -485,7 +460,7 @@ document.getElementById("btn-skip-due-date").addEventListener("click", () => {
 });
 
 function showPrompt(task) {
-  document.getElementById("prompt-output").value = task.generatedPrompt;
+  document.getElementById("prompt-output").value = buildPrompt(task);
   document.getElementById("prompt-file-reminder").hidden = !mentionsFileKeyword(task.rawEmailContent);
   openModal("modal-prompt");
 }
@@ -509,12 +484,9 @@ function copyText(text, sourceElId) {
 }
 
 // ---------- 할일 상세 / 상태 변경 ----------
-let currentDetailTaskId = null;
-
 function openDetail(taskId) {
   const task = state.tasks.find((t) => t.id === taskId);
   if (!task) return;
-  currentDetailTaskId = taskId;
 
   document.getElementById("detail-title").textContent = task.title;
   const badge = document.getElementById("detail-status-badge");
@@ -558,9 +530,9 @@ function openDetail(taskId) {
   }
 
   const promptSection = document.getElementById("detail-prompt-section");
-  if (task.generatedPrompt) {
+  if (task.rawEmailContent) {
     promptSection.hidden = false;
-    document.getElementById("detail-prompt-content").value = task.generatedPrompt;
+    document.getElementById("detail-prompt-content").value = buildPrompt(task);
     document.getElementById("detail-file-reminder").hidden = !mentionsFileKeyword(task.rawEmailContent);
   } else {
     promptSection.hidden = true;
@@ -581,16 +553,11 @@ document.getElementById("btn-copy-detail-prompt").addEventListener("click", () =
   copyText(document.getElementById("detail-prompt-content").value, "detail-prompt-content");
 });
 
-function changeStatus(taskId, newStatus) {
-  const task = state.tasks.find((t) => t.id === taskId);
-  if (!task) return;
-  const now = new Date().toISOString();
-  task.status = newStatus;
-  task.statusHistory.push({ status: newStatus, changedAt: now });
-  task.completedAt = newStatus === "완료" ? now : null;
-  saveState();
+async function changeStatus(taskId, newStatus) {
+  const updated = await api("PATCH", `/api/tasks/${taskId}/status`, { status: newStatus });
+  if (!updated) return;
+  await loadState();
   openDetail(taskId);
-  render();
 }
 
 // ---------- 설정 ----------
@@ -598,11 +565,14 @@ document.getElementById("btn-settings").addEventListener("click", () => {
   document.getElementById("settings-folder-input").value = state.settings.taskFolder || "";
   openModal("modal-settings");
 });
-document.getElementById("btn-save-settings").addEventListener("click", () => {
-  state.settings.taskFolder = document.getElementById("settings-folder-input").value.trim();
-  saveState();
+document.getElementById("btn-save-settings").addEventListener("click", async () => {
+  const taskFolder = document.getElementById("settings-folder-input").value.trim();
+  const res = await api("PATCH", "/api/settings", { taskFolder });
+  if (res) {
+    state.settings.taskFolder = taskFolder;
+  }
   closeModal("modal-settings");
 });
 
 // ---------- 초기 렌더 ----------
-render();
+loadState();

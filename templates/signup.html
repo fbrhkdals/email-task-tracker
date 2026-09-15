@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>회원가입 - 이메일 할일관리</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="auth-page">
+    <div class="modal auth-container">
+      <h1 style="text-align:center;">📬 이메일 할일관리</h1>
+      <h2 class="auth-title">회원가입</h2>
+
+      {% if error %}
+      <p class="auth-error">{{ error }}</p>
+      {% endif %}
+
+      <form class="auth-form" action="{{ url_for('signup') }}" method="post">
+        <input type="text" name="username" placeholder="아이디" autocomplete="username" required>
+        <input type="password" name="password" placeholder="비밀번호" autocomplete="new-password" required minlength="4">
+        <button type="submit" class="btn btn-primary">가입하기</button>
+      </form>
+
+      <p class="auth-switch">이미 계정이 있으신가요? <a href="{{ url_for('login') }}">로그인</a></p>
+    </div>
+  </div>
+</body>
+</html>
