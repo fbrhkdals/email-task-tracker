@@ -168,6 +168,31 @@ body {
   margin-top: 20px;
 }
 
+.file-chip-input .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.chip {
+  background: #f1eeff;
+  color: #6c5ce7;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chip button {
+  border: none;
+  background: none;
+  color: #6c5ce7;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0;
+}
+
 .file-reminder {
   background: #fff2cc;
   color: #8a6d00;

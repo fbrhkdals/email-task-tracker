@@ -74,6 +74,9 @@ def init_db():
             cur.execute(
                 "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS automated_at TIMESTAMPTZ"
             )
+            cur.execute(
+                "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS related_files JSONB NOT NULL DEFAULT '[]'"
+            )
         conn.commit()
     finally:
         conn.close()
@@ -111,11 +114,15 @@ def serialize_task(row):
         "completedAt": row["completed_at"].isoformat() if row["completed_at"] else None,
         "statusHistory": row["status_history"],
         "automatedAt": row["automated_at"].isoformat() if row.get("automated_at") else None,
+        "relatedFiles": row.get("related_files") or [],
     }
 
 
 def build_prompt(task, task_folder):
     folder = task_folder or "(설정에서 데스크탑 할일 폴더 경로를 지정해주세요)"
+    files = task.get("relatedFiles") or []
+    file_lines = "\n".join(f"- {f}" for f in files) if files else "없음"
+
     return f"""[할일 처리 요청]
 
 ## 이메일 원문
@@ -124,6 +131,9 @@ def build_prompt(task, task_folder):
 ## 마감일
 {task["dueDate"] or "지정되지 않음"}
 
+## 관련 파일 (경로만 안내됨 — 내용은 이 프롬프트에 없으니 네가 직접 열어서 확인해야 함)
+{file_lines}
+
 ## 요청 사항
 1. "{folder}" 아래에 이 할일 전용 폴더를 만들고, 아래 3가지를 구분해서 각각 파일로 저장해줘.
    - 이메일 원문 (raw)
@@ -131,7 +141,7 @@ def build_prompt(task, task_folder):
    - 네가 지금 바로 처리한 결과물이 있다면 그 산출물
 2. 이메일 내용을 한국어로 간단히 요약해줘.
 3. 답장 초안 작성처럼 네가 스스로 처리 가능한 간단한 작업이 있다면 지금 바로 처리해줘.
-4. 이 프롬프트와 함께 첨부된 파일이 있다면, 그 내용도 참고해서 활용해줘."""
+4. 위 "관련 파일" 경로가 있다면 실제로 열어서 내용을 참고하고, 필요한 작업에 활용해줘."""
 
 
 # ---------- 인증 ----------
@@ -279,13 +289,15 @@ def api_create_task():
     raw_email_content = data.get("rawEmailContent") or ""
     project_id = data.get("projectId") or None
     due_date = data.get("dueDate") or None
+    related_files = [f.strip() for f in (data.get("relatedFiles") or []) if f.strip()]
 
     db = get_db()
     with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(
             """
-            INSERT INTO tasks (user_id, project_id, title, raw_email_content, due_date, status_history)
-            VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+            INSERT INTO tasks
+                (user_id, project_id, title, raw_email_content, due_date, status_history, related_files)
+            VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
             RETURNING *
             """,
             (
@@ -295,6 +307,7 @@ def api_create_task():
                 raw_email_content,
                 due_date,
                 psycopg2.extras.Json([{"status": "진행중", "changedAt": _now_iso()}]),
+                psycopg2.extras.Json(related_files),
             ),
         )
         row = cur.fetchone()

@@ -93,6 +93,12 @@
       <label>이메일 본문 붙여넣기</label>
       <textarea id="email-content-input" rows="8" placeholder="이메일 내용을 여기에 붙여넣으세요"></textarea>
 
+      <label>관련 파일 경로 (선택 — 파일 자체가 아니라 경로만 저장됩니다. 자동화 실행 시 Claude가 이 경로로 직접 파일을 열어봅니다)</label>
+      <div class="file-chip-input">
+        <input type="text" id="email-file-input" placeholder="예: C:\Desktop\보고서.docx (Enter로 추가)">
+        <div class="chips" id="email-file-chips"></div>
+      </div>
+
       <label>프로젝트 (선택)</label>
       <select id="email-project-select"><option value="">없음</option></select>
 
@@ -121,7 +127,7 @@
     <div class="modal modal-wide">
       <h2>✅ 할일이 등록되었습니다</h2>
       <p class="modal-note">아래 프롬프트를 복사해서 Claude Desktop/Code에 붙여넣으세요.</p>
-      <p class="file-reminder" id="prompt-file-reminder" hidden>📎 이 이메일에 파일이 언급된 것 같아요! 프롬프트와 함께 관련 파일도 잊지 말고 첨부해주세요.</p>
+      <p class="file-reminder" id="prompt-file-reminder" hidden>📎 이 이메일에 파일이 언급된 것 같은데 관련 파일 경로를 등록 안 하신 것 같아요. 잊으신 거라면 위 입력란에 추가해주세요.</p>
       <textarea id="prompt-output" rows="14" readonly></textarea>
       <div class="modal-actions">
         <button class="btn btn-ghost" data-close-modal>닫기</button>
@@ -147,9 +153,14 @@
         <pre id="detail-email-content"></pre>
       </div>
 
+      <div class="detail-section" id="detail-files-section" hidden>
+        <h3>관련 파일</h3>
+        <ul id="detail-files-list"></ul>
+      </div>
+
       <div class="detail-section" id="detail-prompt-section" hidden>
         <h3>생성된 프롬프트</h3>
-        <p class="file-reminder" id="detail-file-reminder" hidden>📎 이 이메일에 파일이 언급된 것 같아요! 프롬프트와 함께 관련 파일도 잊지 말고 첨부해주세요.</p>
+        <p class="file-reminder" id="detail-file-reminder" hidden>📎 이 이메일에 파일이 언급된 것 같은데 관련 파일 경로를 등록 안 하신 것 같아요. 잊으신 거라면 위 입력란에 추가해주세요.</p>
         <textarea id="detail-prompt-content" rows="10" readonly></textarea>
         <button class="btn btn-secondary" id="btn-copy-detail-prompt">📋 다시 복사</button>
       </div>

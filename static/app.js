@@ -132,6 +132,9 @@ function generateTitle(emailText) {
 // ---------- AI 실행 프롬프트 생성 ----------
 function buildPrompt(task) {
   const folder = state.settings.taskFolder || "(설정에서 데스크탑 할일 폴더 경로를 지정해주세요)";
+  const files = task.relatedFiles && task.relatedFiles.length
+    ? task.relatedFiles.map((f) => `- ${f}`).join("\n")
+    : "없음";
 
   return `[할일 처리 요청]
 
@@ -141,6 +144,9 @@ ${task.rawEmailContent || "(원문 없음)"}
 ## 마감일
 ${task.dueDate || "지정되지 않음"}
 
+## 관련 파일 (경로만 안내됨 — 내용은 이 프롬프트에 없으니 네가 직접 열어서 확인해야 함)
+${files}
+
 ## 요청 사항
 1. "${folder}" 아래에 이 할일 전용 폴더를 만들고, 아래 3가지를 구분해서 각각 파일로 저장해줘.
    - 이메일 원문 (raw)
@@ -148,7 +154,7 @@ ${task.dueDate || "지정되지 않음"}
    - 네가 지금 바로 처리한 결과물이 있다면 그 산출물
 2. 이메일 내용을 한국어로 간단히 요약해줘.
 3. 답장 초안 작성처럼 네가 스스로 처리 가능한 간단한 작업이 있다면 지금 바로 처리해줘.
-4. 이 프롬프트와 함께 첨부된 파일이 있다면, 그 내용도 참고해서 활용해줘.`;
+4. 위 "관련 파일" 경로가 있다면 실제로 열어서 내용을 참고하고, 필요한 작업에 활용해줘.`;
 }
 
 // ---------- 모달 열기/닫기 ----------
@@ -402,12 +408,46 @@ document.getElementById("btn-save-quick").addEventListener("click", async () => 
 });
 
 // ---------- 이메일로 추가 ----------
+let pendingEmailFiles = [];
+
 document.getElementById("btn-add-email").addEventListener("click", () => {
   document.getElementById("email-content-input").value = "";
   document.getElementById("email-project-select").value = "";
+  pendingEmailFiles = [];
+  renderFileChips();
   populateProjectSelects();
   openModal("modal-email");
 });
+
+document.getElementById("email-file-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const val = e.target.value.trim();
+    if (val) {
+      pendingEmailFiles.push(val);
+      e.target.value = "";
+      renderFileChips();
+    }
+  }
+});
+
+function renderFileChips() {
+  const box = document.getElementById("email-file-chips");
+  box.innerHTML = "";
+  pendingEmailFiles.forEach((f, idx) => {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = f;
+    const rm = document.createElement("button");
+    rm.textContent = "×";
+    rm.addEventListener("click", () => {
+      pendingEmailFiles.splice(idx, 1);
+      renderFileChips();
+    });
+    chip.appendChild(rm);
+    box.appendChild(chip);
+  });
+}
 
 let lastCreatedTaskId = null;
 
@@ -424,6 +464,7 @@ document.getElementById("btn-save-email").addEventListener("click", async () => 
     rawEmailContent: content,
     projectId,
     dueDate,
+    relatedFiles: pendingEmailFiles,
   });
   if (!created) return;
 
@@ -459,9 +500,13 @@ document.getElementById("btn-skip-due-date").addEventListener("click", () => {
   if (task) showPrompt(task);
 });
 
+function needsFileReminder(task) {
+  return mentionsFileKeyword(task.rawEmailContent) && (!task.relatedFiles || task.relatedFiles.length === 0);
+}
+
 function showPrompt(task) {
   document.getElementById("prompt-output").value = buildPrompt(task);
-  document.getElementById("prompt-file-reminder").hidden = !mentionsFileKeyword(task.rawEmailContent);
+  document.getElementById("prompt-file-reminder").hidden = !needsFileReminder(task);
   openModal("modal-prompt");
 }
 
@@ -532,11 +577,25 @@ function openDetail(taskId) {
     emailSection.hidden = true;
   }
 
+  const filesSection = document.getElementById("detail-files-section");
+  if (task.relatedFiles && task.relatedFiles.length) {
+    filesSection.hidden = false;
+    const ul = document.getElementById("detail-files-list");
+    ul.innerHTML = "";
+    task.relatedFiles.forEach((f) => {
+      const li = document.createElement("li");
+      li.textContent = f;
+      ul.appendChild(li);
+    });
+  } else {
+    filesSection.hidden = true;
+  }
+
   const promptSection = document.getElementById("detail-prompt-section");
   if (task.rawEmailContent) {
     promptSection.hidden = false;
     document.getElementById("detail-prompt-content").value = buildPrompt(task);
-    document.getElementById("detail-file-reminder").hidden = !mentionsFileKeyword(task.rawEmailContent);
+    document.getElementById("detail-file-reminder").hidden = !needsFileReminder(task);
   } else {
     promptSection.hidden = true;
   }
